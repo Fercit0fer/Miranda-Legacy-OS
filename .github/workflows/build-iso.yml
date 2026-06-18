@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: 📥 Descargar archivos del repositorio
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🧹 Liberar espacio en disco
         run: |
