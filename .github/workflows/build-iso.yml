@@ -1,0 +1,84 @@
+name: 🛡️ Construir Miranda Legacy Holding OS
+
+on:
+  workflow_dispatch:
+    inputs:
+      nota:
+        description: 'Nota opcional para este build'
+        required: false
+        default: 'Miranda Legacy Holding OS v1.0'
+
+jobs:
+  build-iso:
+    name: Construir ISO Miranda Legacy
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+      - name: 📥 Descargar archivos del repositorio
+        uses: actions/checkout@v4
+
+      - name: 🧹 Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force 2>/dev/null || true
+          df -h
+
+      - name: 📦 Instalar herramientas de construcción
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            live-build \
+            debootstrap \
+            xorriso \
+            squashfs-tools \
+            syslinux \
+            syslinux-common \
+            isolinux \
+            genisoimage \
+            curl \
+            wget \
+            ca-certificates
+          echo "✅ Herramientas instaladas"
+
+      - name: 🔧 Dar permisos al script
+        run: chmod +x scripts/build-miranda.sh
+
+      - name: 🏗️ CONSTRUIR MIRANDA LEGACY HOLDING OS ISO
+        run: sudo bash scripts/build-miranda.sh
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          LANG: es_ES.UTF-8
+
+      - name: 📊 Información del ISO generado
+        run: |
+          echo "======================================"
+          echo "  MIRANDA LEGACY HOLDING OS"
+          echo "  ISO GENERADA:"
+          echo "======================================"
+          ls -lh output/*.iso 2>/dev/null || echo "⚠️ No se encontró ISO - ver logs"
+          df -h
+
+      - name: 📤 SUBIR ISO (disponible para descargar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Miranda-Legacy-Holding-OS-1.0-i386
+          path: output/Miranda-Legacy-Holding-OS-1.0-i386.iso
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: ✅ Build completado
+        run: |
+          echo ""
+          echo "======================================"
+          echo "  ✅ BUILD EXITOSO"
+          echo "  Ve a la pestaña 'Actions' en GitHub"
+          echo "  Click en este build → 'Artifacts'"
+          echo "  Descarga: Miranda-Legacy-Holding-OS-1.0-i386"
+          echo "======================================"
+          echo ""
+          echo "  Powered by Claude · Anthropic"
+          echo "  © Miranda Legacy Holding"
