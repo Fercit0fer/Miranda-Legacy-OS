@@ -1,0 +1,185 @@
+name: 🖥️ Build Miranda Legacy Holding OS ISO
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Versión del release (ej: v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+jobs:
+  build-iso:
+    name: Compilar ISO Miranda Legacy OS
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    permissions:
+      contents: write
+
+    steps:
+      # ── 1. Checkout del repositorio ──────────────────────────────────────────
+      - name: 📥 Descargar código del repositorio
+        uses: actions/checkout@v4
+
+      # ── 2. Mostrar información del entorno ───────────────────────────────────
+      - name: ℹ️ Información del entorno de build
+        run: |
+          echo "=== Sistema ==="
+          uname -a
+          echo "=== Espacio en disco ==="
+          df -h
+          echo "=== RAM disponible ==="
+          free -h
+          echo "=== Fecha y hora ==="
+          date
+
+      # ── 3. Instalar dependencias base ────────────────────────────────────────
+      - name: 📦 Instalar dependencias del sistema
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap \
+            squashfs-tools \
+            xorriso \
+            grub-pc-bin \
+            grub-efi-ia32-bin \
+            mtools \
+            dosfstools \
+            isolinux \
+            syslinux-common \
+            wget \
+            ca-certificates
+
+      # ── 4. Preparar directorios de trabajo ───────────────────────────────────
+      - name: 📁 Crear directorios de trabajo
+        run: |
+          mkdir -p output
+          chmod +x scripts/build-iso.sh
+
+      # ── 5. Ejecutar el build de la ISO ───────────────────────────────────────
+      - name: 🔨 Construir ISO Miranda Legacy Holding OS
+        run: |
+          sudo bash scripts/build-iso.sh
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      # ── 6. Verificar que la ISO fue creada ───────────────────────────────────
+      - name: ✅ Verificar ISO generada
+        run: |
+          if ls output/*.iso 1>/dev/null 2>&1; then
+            echo "ISO encontrada:"
+            ls -lh output/*.iso
+            echo "ISO_FILE=$(ls output/*.iso)" >> $GITHUB_ENV
+            echo "ISO_NAME=$(basename $(ls output/*.iso))" >> $GITHUB_ENV
+          else
+            echo "ERROR: No se encontró ningún archivo ISO en output/"
+            exit 1
+          fi
+
+      # ── 7. Calcular checksum MD5 y SHA256 ────────────────────────────────────
+      - name: 🔐 Generar checksums de verificación
+        run: |
+          cd output
+          for iso in *.iso; do
+            md5sum "$iso" > "${iso}.md5"
+            sha256sum "$iso" > "${iso}.sha256"
+            echo "=== Checksums de $iso ==="
+            cat "${iso}.md5"
+            cat "${iso}.sha256"
+          done
+
+      # ── 8. Subir ISO como artifact (siempre disponible) ──────────────────────
+      - name: 📤 Subir ISO como artifact de GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: miranda-legacy-holding-os-iso
+          path: |
+            output/*.iso
+            output/*.md5
+            output/*.sha256
+          retention-days: 30
+
+      # ── 9. Determinar versión del release ────────────────────────────────────
+      - name: 🏷️ Determinar versión
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ "${{ github.event.inputs.release_version }}" != "" ]]; then
+            VERSION="${{ github.event.inputs.release_version }}"
+          else
+            VERSION="v1.0.0-build-${{ github.run_number }}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Versión del release: ${VERSION}"
+
+      # ── 10. Crear GitHub Release y subir ISO ─────────────────────────────────
+      - name: 🚀 Crear GitHub Release y publicar ISO
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: "Miranda Legacy Holding OS ${{ env.VERSION }}"
+          body: |
+            ## 🖥️ Miranda Legacy Holding OS ${{ env.VERSION }}
+            **Powered by Claude - Anthropic**
+
+            Sistema operativo retro-futurista basado en Debian 12 Bookworm 32-bit,
+            optimizado para HP Mini 110-1a con estética Windows 2000.
+
+            ---
+
+            ### 📋 Especificaciones
+            | Aspecto | Detalle |
+            |---------|---------|
+            | SO Base | Debian 12 Bookworm (i386 / 32-bit) |
+            | Escritorio | XFCE 4.18+ |
+            | Kernel | Linux 6.x con soporte PAE |
+            | Hardware objetivo | HP Mini 110-1a (Intel Atom N270) |
+            | RAM mínima | 512 MB (recomendado 1 GB+) |
+            | Almacenamiento | 5-8 GB para instalación |
+            | Compatibilidad Windows | Wine 9.x preconfigurado |
+            | Idioma | Español (+ English) |
+
+            ### 📦 Software incluido
+            - **Navegador**: Firefox ESR 32-bit + uBlock Origin
+            - **Correo**: Thunderbird
+            - **Oficina**: Abiword (.doc, .odt, .docx)
+            - **Compatibilidad**: Wine 9.x (ejecutar .exe de Windows)
+            - **Archivos**: Thunar (estilo Windows Explorer)
+            - **Sistema**: Terminal, Gestor de energía, Screensaver
+
+            ### 💿 Cómo usar la ISO
+            **Grabar en USB (Linux/Mac):**
+            ```bash
+            sudo dd if=miranda-legacy-holding-os-1.0-i386.iso of=/dev/sdX bs=4M status=progress
+            ```
+            **Windows:** Usar Rufus o balenaEtcher
+
+            ### ✅ Verificar integridad
+            ```bash
+            # MD5
+            md5sum -c miranda-legacy-holding-os-1.0-i386.iso.md5
+            # SHA256
+            sha256sum -c miranda-legacy-holding-os-1.0-i386.iso.sha256
+            ```
+
+            ---
+            *"El pasado nunca muere, simplemente se reoptimiza para el futuro."*
+
+            **Build:** `#${{ github.run_number }}` | **Commit:** `${{ github.sha }}`
+          files: |
+            output/*.iso
+            output/*.md5
+            output/*.sha256
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
